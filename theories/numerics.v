@@ -158,7 +158,10 @@ Proof.
       * rewrite Zbits.P_mod_two_p_eq. destruct Coqlib.zeq as [E'|E'] => //.
         apply Zdiv.Z_mod_zero_opp_full in E. simpl in E.
         unfold modulus, Zpower.two_power_nat in *.
-        rewrite -(Zdiv.Z_mod_plus _ 1) in E; last by lias.
+        have Hpos : (Z.pos (Zpower.shift_nat wordsize 1) > 0)%Z by lias.
+        have Hmod := Zdiv.Z_mod_plus (Z.neg i) 1
+                       (Z.pos (Zpower.shift_nat wordsize 1)) Hpos.
+        rewrite -Hmod in E.
         rewrite Z.mul_1_l in E. rewrite Ep in E.
         by rewrite -Z.mod_opp_l_nz; lias.
     + rewrite/Z_mod_modulus. rewrite /modulus /Zpower.two_power_nat.
@@ -178,10 +181,20 @@ Proof.
         destruct Coqlib.zeq as [E'|E'].
         -- unfold Zpower.two_power_nat in *.
            rewrite Zdiv.Zplus_mod in E'.
-           rewrite Zdiv.Z_mod_zero_opp_full in E'; last by rewrite Zdiv.Z_mod_same_full.
+           have Hopp := Zdiv.Z_mod_zero_opp_full
+                          (Z.pos (Zpower.shift_nat wordsize 1))
+                          (Z.pos (Zpower.shift_nat wordsize 1))
+                          (Zdiv.Z_mod_same_full
+                             (Z.pos (Zpower.shift_nat wordsize 1))).
+           rewrite Hopp in E'.
            rewrite Z.add_0_r in E'. by rewrite Zdiv.Zmod_mod in E'.
         -- rewrite Zdiv.Zplus_mod. rewrite/Zpower.two_power_nat.
-           rewrite Zdiv.Z_mod_zero_opp_full; last by rewrite Zdiv.Z_mod_same_full.
+           have Hopp := Zdiv.Z_mod_zero_opp_full
+                          (Z.pos (Zpower.shift_nat wordsize 1))
+                          (Z.pos (Zpower.shift_nat wordsize 1))
+                          (Zdiv.Z_mod_same_full
+                             (Z.pos (Zpower.shift_nat wordsize 1))).
+           rewrite Hopp.
            rewrite Z.add_0_r. by rewrite Zdiv.Zmod_mod.
 Qed.
 
@@ -364,6 +377,7 @@ Proof.
     have E: intval one = Zpower.two_p Z0.
     { compute. move: WS.wordsize_not_zero. by elim: WS.wordsize. }
     rewrite {} E Zbits.Z_one_bits_two_p /=.
+    + by lias.
     + rewrite nth_rcons nth_nseq size_nseq.
       case E: (i == wordsize - 1); move/ssrnat.eqnP: E => E.
       * rewrite {} E. rewrite_by (wordsize - (wordsize - 1) - 1 = 0).
@@ -372,7 +386,6 @@ Proof.
         rewrite in_cons in_nil Bool.orb_false_r.
         rewrite_by ((Z.of_nat (wordsize - i - 1) == 0%Z) = (wordsize - i - 1 == 0)).
         apply gtn_eqF. move/leP: I E. move: WS.wordsize_not_zero. rewrite/wordsize. by lias.
-    + by lias.
 Qed.
 
 (** As the definitions [zero], [one], and [mone] are used later on,
@@ -413,6 +426,9 @@ Proof.
       + apply: Znat.inj_lt. by apply/leP.
     - exfalso. move: Epp. by case: (p). }
   rewrite {} Rm. rewrite Zbits.Z_one_bits_two_p /=.
+  - split.
+    + by apply: Znat.Nat2Z.is_nonneg.
+    + apply: Znat.inj_lt. by apply/leP.
   - have I': (p < wordsize)%coq_nat; first by apply/ltP. elim: I'.
     + move=> /=. rewrite_by (p.+1 - 1 - p = 0).
       rewrite in_cons in_nil eqxx /=. f_equal.
@@ -420,11 +436,8 @@ Proof.
       move=> i I'. by rewrite in_cons in_nil nat_Z_lt_neq.
     + move=> ws Ip E /=. rewrite E /=.
       rewrite in_cons in_nil nat_Z_gt_neq.
-      * by rewrite_by (ws.+1 - 1 - p = (ws - 1 - p).+1).
       * by lias.
-  - split.
-    + by apply: Znat.Nat2Z.is_nonneg.
-    + apply: Znat.inj_lt. by apply/leP.
+      * by rewrite_by (ws.+1 - 1 - p = (ws - 1 - p).+1).
 Qed.
 
 (** Auxiliary function for [convert_from_bits]. **)
@@ -469,7 +482,8 @@ Proof.
             * rewrite IH => //. destruct Coqlib.zlt as [L'|L'] => //=.
               exfalso. have ?: (a = ws); first by lias. subst. by rewrite I in N.
       }
-    + rewrite -filter_out_zlt; last by rewrite E. by rewrite IH.
+    + have Hnot : (Z.of_nat ws) \notin l by rewrite E.
+      rewrite -(filter_out_zlt Hnot). by rewrite IH.
 Qed.
 
 (** Converting a sequence of bits back to [T]. **)
@@ -507,6 +521,7 @@ Lemma convert_to_from_bits : forall a,
   a = convert_from_bits (convert_to_bits a).
 Proof.
   move=> a. rewrite /convert_from_bits convert_from_bits_to_Z_one_bits_power_index_to_bits.
+  - by apply: Zbits_Z_one_bits_uniq.
   - have E: [seq x <- Zbits.Z_one_bits wordsize (intval a) 0 | Coqlib.zlt x wordsize]
             = Zbits.Z_one_bits wordsize (intval a) 0.
     {
@@ -516,9 +531,8 @@ Proof.
       lias.
     }
     rewrite E -Zbits.Z_one_bits_powerserie.
-    + apply: eq_T_intval => /=. by rewrite Z_mod_modulus_intval.
     + destruct a as [a C] => /=. move: {E} C. rewrite/modulus. by lias.
-  - by apply: Zbits_Z_one_bits_uniq.
+    + apply: eq_T_intval => /=. by rewrite Z_mod_modulus_intval.
 Qed.
 
 
@@ -565,34 +579,55 @@ Local Lemma power_index_to_bits_Zbits_powerserie : forall (wordsize : nat) l1 l2
   = Zbits.powerserie (filter (fun b => Coqlib.zlt (-1) b && Coqlib.zlt b wordsize)%Z l2).
 Proof.
   elim => /=.
-  - move=> l1 l2 U1 U2 _. rewrite filter_none.
-    + rewrite filter_none.
-      * by [].
-      * rewrite list_all_forall => a I.
-        repeat destruct Coqlib.zlt => //. exfalso. by lias.
-    + rewrite list_all_forall => a I.
-      repeat destruct Coqlib.zlt => //. exfalso. by lias.
+  - move=> l1 l2 U1 U2 _.
+    have Hnone1 : filter (fun b => Coqlib.zlt (-1) b && Coqlib.zlt b 0)%Z l1 = [::].
+    { apply filter_none. rewrite list_all_forall => a I.
+      repeat destruct Coqlib.zlt => //. exfalso. by lias. }
+    have Hnone2 : filter (fun b => Coqlib.zlt (-1) b && Coqlib.zlt b 0)%Z l2 = [::].
+    { apply filter_none. rewrite list_all_forall => a I.
+      repeat destruct Coqlib.zlt => //. exfalso. by lias. }
+    by rewrite Hnone1 Hnone2.
   - move=> ws IH l1 l2 U1 U2. case => E1 E2.
     repeat rewrite filter_and. destruct in_mem eqn: E1'.
-    + rewrite (Zbits_powerserie_uniq_in (z := ws)).
-      * rewrite (Zbits_powerserie_uniq_in (z := ws) (l := filter _ (filter _ l2))).
-        -- f_equal. repeat rewrite -filter_and. erewrite eq_in_filter.
-           ++ erewrite IH; try eassumption.
-              f_equal. apply: eq_in_filter.
-              move=> x I2. apply is_true_bool.
-              by repeat destruct Coqlib.zlt => /=;
-                (try by lias_simpl; have ?: (x = ws); [ lias | subst; eauto ]);
-                lias.
-           ++ move=> x I1. apply is_true_bool.
-              by repeat destruct Coqlib.zlt => /=;
-                (try by lias_simpl; have ?: (x = ws); [ lias | subst; eauto ]);
-                lias.
-        -- by repeat apply: filter_uniq.
-        -- repeat rewrite mem_filter. by repeat destruct Coqlib.zlt => //=; lias.
-      * by repeat apply filter_uniq.
-      * repeat rewrite mem_filter. by repeat destruct Coqlib.zlt => //=; lias.
-    + rewrite -filter_out_zlt; last by rewrite E1'.
-      rewrite -filter_out_zlt; last by rewrite -E1.
+    + have Huniq1 := filter_uniq (fun a => Coqlib.zlt (-1) a)
+                       (filter_uniq
+                          (fun a => Coqlib.zlt a (Z.pos (Pos.of_succ_nat ws))) U1).
+      have Hin1 : (Z.of_nat ws) \in
+                    filter (fun a => Coqlib.zlt (-1) a)
+                      (filter (fun a => Coqlib.zlt a (Z.pos (Pos.of_succ_nat ws))) l1).
+      { repeat rewrite mem_filter. by repeat destruct Coqlib.zlt => //=; lias. }
+      have Huniq2 := filter_uniq (fun a => Coqlib.zlt (-1) a)
+                       (filter_uniq
+                          (fun a => Coqlib.zlt a (Z.pos (Pos.of_succ_nat ws))) U2).
+      have Hin2 : (Z.of_nat ws) \in
+                    filter (fun a => Coqlib.zlt (-1) a)
+                      (filter (fun a => Coqlib.zlt a (Z.pos (Pos.of_succ_nat ws))) l2).
+      { repeat rewrite mem_filter. by repeat destruct Coqlib.zlt => //=; lias. }
+      have Hseries1 := Zbits_powerserie_uniq_in Huniq1 Hin1.
+      have Hseries2 := Zbits_powerserie_uniq_in Huniq2 Hin2.
+      rewrite Hseries1 Hseries2. f_equal.
+      repeat rewrite -filter_and.
+      have Hfilter1 :
+          filter (fun x => (x != Z.of_nat ws) && Coqlib.zlt (-1) x
+                           && Coqlib.zlt x (Z.pos (Pos.of_succ_nat ws))) l1
+          = filter (fun x => Coqlib.zlt (-1) x && Coqlib.zlt x (Z.of_nat ws)) l1.
+      { apply: eq_in_filter. move=> x I1. apply is_true_bool.
+        by repeat destruct Coqlib.zlt => /=;
+          (try by lias_simpl; have ?: (x = ws); [ lias | subst; eauto ]);
+          lias. }
+      have Hfilter2 :
+          filter (fun x => (x != Z.of_nat ws) && Coqlib.zlt (-1) x
+                           && Coqlib.zlt x (Z.pos (Pos.of_succ_nat ws))) l2
+          = filter (fun x => Coqlib.zlt (-1) x && Coqlib.zlt x (Z.of_nat ws)) l2.
+      { apply: eq_in_filter. move=> x I2. apply is_true_bool.
+        by repeat destruct Coqlib.zlt => /=;
+          (try by lias_simpl; have ?: (x = ws); [ lias | subst; eauto ]);
+          lias. }
+      by rewrite Hfilter1 Hfilter2 (IH l1 l2 U1 U2 E2).
+    + have Hnot1 : (Z.of_nat ws) \notin l1 by rewrite E1'.
+      have Hnot2 : (Z.of_nat ws) \notin l2 by rewrite -E1.
+      rewrite -(filter_out_zlt Hnot1).
+      rewrite -(filter_out_zlt Hnot2).
       repeat rewrite -filter_and. by apply: IH.
 Qed.
 
@@ -602,8 +637,9 @@ Lemma convert_to_bits_inj : forall a b,
 Proof.
   move=> [a Ra] [b Rb] E. apply: eq_T_intval => /=.
   unfold modulus in Ra, Rb.
-  rewrite (Zbits.Z_one_bits_powerserie wordsize a); last by lias.
-  rewrite (Zbits.Z_one_bits_powerserie wordsize b); last by lias.
+  have Ha := Zbits.Z_one_bits_powerserie wordsize a ltac:(lias).
+  have Hb := Zbits.Z_one_bits_powerserie wordsize b ltac:(lias).
+  rewrite Ha Hb.
   unfold convert_to_bits in E. move: E => /= E.
   apply power_index_to_bits_Zbits_powerserie in E.
   {
